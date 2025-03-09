@@ -18,5 +18,5 @@ ENV OLLAMA_KEEP_ALIVE -1
 ENV MODEL yottahmd/tiny-swallow-1.5b-instruct
 RUN ollama serve & sleep 5 && ollama pull $MODEL 
 
-# Start Ollama
+# Start Ollama to serve the REST API
 ENTRYPOINT ["ollama", "serve"]
