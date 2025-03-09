@@ -1,0 +1,14 @@
+# MacOS
+.DS_Store
+
+# Directory for local development
+.local/
+
+# Go code coverage
+coverage*
+
+# delve debugger
+__debug_bin*
+
+# Environment variables
+.env

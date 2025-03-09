@@ -1,0 +1,27 @@
+{{ define "base" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex">
+  <script src="https://unpkg.com/htmx.org@2.0.4"
+    integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+    crossorigin="anonymous"></script>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/css/global.css" />
+  <title>
+    AI Code Review
+  </title>
+  {{ block "styles" . }}{{ end }}
+</head>
+
+<body>
+  {{ block "header" . }}{{ end }}
+  <main>{{ block "content" . }}{{ end }}</main>
+  {{ block "scripts" . }}{{ end }}
+</body>
+
+</html>
+{{ end }}

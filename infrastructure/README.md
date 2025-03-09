@@ -1,6 +1,6 @@
 # Infrastructure as Code (IaC)
 
-This repository contains the infrastructure-as-code for the project, managed with Terraform on Google Cloud Platform (GCP).
+This repository contains the infrastructure-as-code for the project, managed with Terraform on Google Cloud Platform (Google Cloud).
 
 This project does not include any sensitive information, such as credentials or private keys. All sensitive data should be stored securely and managed separately outside of version control.
 
@@ -14,7 +14,7 @@ The infrastructure is organized by environment (`dev`, `staging`, `prod`), with 
 
 - [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) (latest stable)
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) (latest stable)
-- GCP account with appropriate permissions
+- Google Cloud account with appropriate permissions
 - Repository mapping configured in [Cloud Build Triggers](https://console.cloud.google.com/cloud-build/triggers)
 
 ## Quick Start
@@ -40,7 +40,7 @@ terraform apply
 
 ## Detailed Deployment Guide
 
-### Creating a New GCP Project
+### Creating a New Google Cloud Project
 
 ```bash
 # Create a new project
@@ -220,9 +220,9 @@ resource "google_storage_bucket" "bucket_app_logs" {
 
 ## Resources
 
-- [Terraform GCP Provider Documentation](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
+- [Terraform Google Cloud Provider Documentation](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
 - [Terraform Best Practices](https://www.terraform-best-practices.com/)
-- [GCP Architecture Center](https://cloud.google.com/architecture)
+- [Google Cloud Architecture Center](https://cloud.google.com/architecture)
 - [Terraform Style Guide](https://developer.hashicorp.com/terraform/language/style)
 
 ## Contributing

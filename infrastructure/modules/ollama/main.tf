@@ -3,6 +3,9 @@ resource "google_cloud_run_v2_service" "backend" {
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
+  # Required for GPU support
+  launch_stage = "BETA"
+
   template {
     containers {
       image = var.image
@@ -16,32 +19,16 @@ resource "google_cloud_run_v2_service" "backend" {
         }
         startup_cpu_boost = true
       }
-
-      # Configure environment variables dynamically
-      dynamic "env" {
-        for_each = local.container_config.env
-        content {
-          name  = env.value.name
-          value = lookup(env.value, "value", null)
-          dynamic "value_source" {
-            for_each = lookup(env.value, "secret", null) != null ? [env.value.secret] : []
-            content {
-              secret_key_ref {
-                secret  = value_source.value.secret_id
-                version = value_source.value.version
-              }
-            }
-          }
-        }
-      }
     }
 
     service_account = var.service_account
 
     # Required for GPU support
     annotations = {
-      "run.googleapis.com/cpu-throttling"      = false
+      "run.googleapis.com/cpu-throttling" = false
+      "run.googleapis.com/launch-stage" = "BETA"
     }
+    
     scaling {
       min_instance_count = 0
       max_instance_count = 1

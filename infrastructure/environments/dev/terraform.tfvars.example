@@ -1,0 +1,7 @@
+region = "value"
+region_cloud_run = "value"
+project_id = "value"
+artifact_repository_id = "value"
+github_owner = "value"
+github_name = "value"
+env = "value"

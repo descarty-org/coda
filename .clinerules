@@ -1,0 +1,594 @@
+# Coding Rules
+
+## Project Overview
+
+Coda is a project designed to provide an example of how to deploy Local GenAI Models (Large Language Model) services to Google Cloud. The project uses Go for backend services and Terraform for infrastructure as code. The system appears to be designed for code review AI capabilities, with components that include a web server, frontend templates, and infrastructure configuration for deploying Ollama (an open-source LLM server) to Google Cloud Run with GPU support.
+
+Key technologies:
+- Go (v1.24.0) for backend development
+- Terraform for infrastructure as code on Google Cloud Platform
+- Ollama for serving LLMs
+- Docker for containerization
+- Chi router for HTTP routing
+- Fx for dependency injection
+- GGUF model format for LLMs
+
+## Project Structure
+
+The codebase is organized into the following main directories:
+
+```
+coda/
+├── cmd/                  # Command line applications entry points
+├── config/               # Configuration files 
+├── docker/               # Docker configurations
+├── gguf/                 # GGUF model management
+├── infrastructure/       # Terraform IaC for Google Cloud resources
+├── internal/             # Internal Go packages
+│   ├── config/           # Configuration loading
+│   ├── frontend/         # Web frontend components
+│   ├── infrastructure/   # Server and middleware
+│   └── logger/           # Logging utilities
+```
+
+### cmd
+Contains the main entry points for applications. Currently includes the server application.
+
+### config
+Stores configuration files for different environments (e.g., local.yaml).
+
+### docker
+Contains Docker-related files, primarily focused on Ollama deployment.
+
+### gguf
+Contains scripts and configurations for managing GGUF models, which are optimized LLM formats:
+- Scripts for downloading models 
+- Modelfile for Ollama configuration
+- README with instructions for converting models to GGUF format
+
+### infrastructure
+Contains Terraform configurations organized in a modular structure:
+- `environments/` - Environment-specific configurations
+- `modules/` - Reusable Terraform modules
+  - `artifact-registry/` - Google Cloud Artifact Registry setup
+  - `ollama/` - Cloud Run setup for Ollama
+
+### internal
+Contains the core Go packages organized by concern:
+- `config/` - Configuration loading and validation
+- `frontend/` - Web UI components and templates
+- `infrastructure/` - HTTP server setup and middleware
+- `logger/` - Structured logging utilities
+
+## Architecture Guidelines
+
+### Overall Architecture
+
+1. **Modular Design**: The application follows a modular architecture with clear separation of concerns.
+   - Example: The project uses `go.uber.org/fx` for dependency injection, visible in `cmd/server/main.go`.
+
+2. **Clean Configuration Loading**: Configuration is loaded from files and environment variables, with validation.
+   - Example: `internal/config/loader.go` loads configuration from files and environment variables.
+
+3. **Layered Architecture**: The application is structured in layers with clear dependencies.
+   - Example: `cmd` depends on `internal`, but not vice versa.
+
+### Go Backend Architecture
+
+1. **Package Structure**: Organize code by module responsibility, not by technical concerns.
+   - Example: The `internal/` directory is organized by module: `config`, `frontend`, `infrastructure`, and `logger`.
+
+2. **Dependency Injection**: Use fx for dependency injection and lifecycle management.
+   - Example: `cmd/server/main.go` uses fx to wire dependencies and manage lifecycle:
+   ```go
+   func serverApp() *fx.App {
+       var opts []fx.Option
+       opts = append(opts, infrastructure.Module)
+       opts = append(opts, fx.Supply(cfg))
+       opts = append(opts, fx.Invoke(infrastructure.ServerLifetimeHooks))
+       opts = append(opts, fx.NopLogger)
+       return fx.New(opts...)
+   }
+   ```
+
+3. **Context Passing**: Use context for request-scoped data like logging.
+   - Example: `internal/logger/context.go` shows context integration with logging.
+
+4. **Modules as Components**: Each internal package that provides functionality should have a `module.go` file.
+   - Example: `internal/frontend/module.go` exports a module for fx:
+   ```go
+   var Module = fx.Module("frontend",
+       fx.Provide(newFrontend),
+       fx.Provide(newIndex),
+   )
+   ```
+
+### Frontend Architecture
+
+1. **Template-based UI**: Use Go's template system to render HTML interfaces.
+   - Example: Templates are stored in `internal/frontend/assets/templates/`.
+
+2. **Embedded Assets**: Frontend assets (templates, static files) are embedded in the Go binary.
+   - Example: `internal/frontend/assets.go` embeds templates and static files:
+   ```go
+   //go:embed assets/templates
+   var templatesFS embed.FS
+   
+   //go:embed assets/static
+   var staticFS embed.FS
+   ```
+
+3. **Hot Reloading**: Support hot reloading of templates in local development.
+   - Example: `internal/frontend/assets.go` includes a file watcher mechanism.
+
+### Infrastructure Architecture
+
+1. **Environment-Based Configuration**: Infrastructure is defined per environment.
+   - Example: `infrastructure/environments/exp/` defines an experimental environment.
+
+2. **Modular Terraform**: Use Terraform modules for reusable infrastructure components.
+   - Example: `infrastructure/modules/` contains reusable modules.
+
+3. **Container Deployment**: Deploy services as containers in Cloud Run.
+   - Example: `infrastructure/modules/ollama/main.tf` configures Cloud Run deployment.
+
+4. **GPU Support**: Configure Cloud Run with GPU for LLM inference.
+   - Example: In `infrastructure/modules/ollama/main.tf`:
+   ```terraform
+   resources {
+     limits = {
+       "cpu" = "8"
+       "memory" = "32Gi"
+       "nvidia.com/gpu" = "1"
+     }
+     startup_cpu_boost = true
+   }
+   ```
+
+## Coding Standards
+
+### Go Coding Style
+
+1. **Error Handling**: Always check errors and provide context.
+   - Example: From `internal/config/loader.go`:
+   ```go
+   data, err := os.ReadFile(f)
+   if err != nil {
+       return nil, fmt.Errorf("read config file: %w", err)
+   }
+   ```
+
+2. **Context Usage**: Pass context.Context as the first parameter in functions that perform I/O.
+   - Example: In logger functions in `internal/logger/context.go`.
+
+3. **Naming Conventions**:
+   - Use camelCase for variable names
+   - Use PascalCase for exported identifiers
+   - Use snake_case for file names
+
+4. **Comments**: All public functions and types should have a comment.
+   - Example: From `internal/config/config.go`:
+   ```go
+   // Config is the configuration for the server.
+   type Config struct {
+       Global  Global  `yaml:"global" validate:"oneof=local cloud"`
+       Logging Logging `yaml:"logging"`
+       Server  Server  `yaml:"server"`
+   }
+   ```
+
+5. **Struct Tags**: Use struct tags for serialization and validation.
+   - Example: From `internal/config/config.go`:
+   ```go
+   type Server struct {
+       Host           string   `yaml:"host" validate:"required"`
+       Port           int      `yaml:"port" validate:"required"`
+       AllowedOrigins []string `yaml:"allowedOrigins"`
+   }
+   ```
+
+6. **Effective Go Principles**: Follow Effective Go best practices, with emphasis on simplicity and divide & conquer approach.
+   - Simplicity: Prefer simple, clear solutions over complex ones. Code should be easy to understand and maintain.
+   - Divide & Conquer: Break complex problems into smaller, manageable parts. Each function or method should have a single responsibility.
+   - Example: Split large functions into smaller, focused functions that each handle one aspect of the problem.
+   - Example: Use composition over inheritance to build complex structures from simple components.
+   - Example: Keep interfaces small and focused on specific behaviors.
+
+### Terraform Coding Style
+
+1. **Resource Naming**: Use `snake_case` for all resource names.
+   - Example: `resource "google_cloud_run_v2_service" "backend"` in `infrastructure/modules/ollama/main.tf`.
+
+2. **Variable Naming**: Use descriptive names for variables.
+   - Example: From `infrastructure/modules/ollama/variable.tf`:
+   ```terraform
+   variable "project_id" {
+     description = "The project to deploy resources"
+     type        = string
+   }
+   ```
+
+3. **Module Structure**: Each module should have `main.tf`, `variable.tf`, and optionally `output.tf`.
+   - Example: `infrastructure/modules/ollama/` contains `main.tf` and `variable.tf`.
+
+4. **Provider Constraints**: Specify provider version constraints.
+   - Example: From `infrastructure/environments/exp/main.tf`:
+   ```terraform
+   terraform {
+     required_providers {
+       google = {
+         source  = "hashicorp/google"
+         version = "~> 6.6.0"
+       }
+       google-beta = {
+         source  = "hashicorp/google-beta"
+         version = "~> 6.6.0"
+       }
+     }
+   }
+   ```
+
+## Development Workflow
+
+1. **Local Development**: Use `make run` to start the server locally.
+   - Example: The Makefile includes a `run` target:
+   ```makefile
+   .PHONY: run
+   run:
+      @echo "${COLOR_GREEN}Running the application...${COLOR_RESET}"
+      @go run ./cmd/server
+   ```
+
+2. **Testing**: Use `make test` to run tests with coverage.
+   - Example: The Makefile includes a `test` target:
+   ```makefile
+   .PHONY: test
+   test: ${LOCAL_BIN_DIR}
+      @echo "${COLOR_GREEN}Running tests...${COLOR_RESET}"
+      @GOBIN=${LOCAL_BIN_DIR} go install ${PKG_gotestsum}
+      @${LOCAL_BIN_DIR}/gotestsum ${GOTESTSUM_ARGS} -- ${GO_TEST_FLAGS}  -coverprofile="coverage.txt" -covermode=atomic ./.../...
+   ```
+
+3. **Linting**: Use `make lint` to run the linter.
+   - Example: The Makefile includes a `lint` target:
+   ```makefile
+   .PHONY: lint
+   lint: ${LOCAL_BIN_DIR}
+      @echo "${COLOR_GREEN}Running linter...${COLOR_RESET}"
+      @GOBIN=${LOCAL_BIN_DIR} go install ${PKG_golangci_lint}
+      @${LOCAL_BIN_DIR}/golangci-lint run --fix
+   ```
+
+4. **Infrastructure Deployment**: Use Terraform for infrastructure changes.
+   - Example: The README in `infrastructure/` explains the Terraform workflow.
+
+5. **CI/CD Pipeline**: Use Cloud Build for continuous integration and deployment.
+   - Example: `cloudbuild.ollama.yaml` defines a build pipeline for Ollama:
+   ```yaml
+   steps:
+     # Build the image
+     - name: "gcr.io/cloud-builders/docker"
+       args:
+         - "build"
+         - "-t"
+         - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}"
+   ```
+
+## Frontend Development
+
+Frontend files are stored in `internal/frontend/assets/` and embedded in the Go binary. The frontend uses Go's template system for rendering HTML.
+
+### Structure
+
+```
+frontend/
+├── static
+│   └── css
+│       └── global.css    # Global CSS styles
+└── templates
+    ├── base.gohtml       # Base template
+    ├── pages
+    │   └── index.gohtml  # Page-specific template
+    └── partials          # Reusable components
+        └── header.gohtml
+```
+
+### Design System
+
+This design system serves as the foundation for Coda, a B2B software platform that provides Local GenAI Models services deployed on Google Cloud. It establishes consistent patterns, components, and guidelines to ensure a cohesive user experience and efficient development workflow.
+
+## Brand Identity
+
+### Brand Values
+- **Reliability**: Dependable infrastructure and services
+- **Efficiency**: Optimized performance for business applications
+- **Security**: Enterprise-grade data protection
+- **Scalability**: Flexible solutions that grow with business needs
+
+### Color Palette
+
+#### Primary Colors
+- **Primary Blue**: #0F62FE
+  - Text on primary: #FFFFFF
+- **Secondary Blue**: #0043CE
+- **Accent**: #3DDBD9
+
+#### Secondary Colors
+- **Success**: #24A148
+- **Warning**: #F1C21B
+- **Error**: #DA1E28
+- **Info**: #0043CE
+
+#### Neutrals
+- **Background (Light)**: #FFFFFF
+- **Background (Dark)**: #161616
+- **Text (Primary)**: #161616
+- **Text (Secondary)**: #525252
+- **Border**: #E0E0E0
+- **Disabled**: #C6C6C6
+
+### Typography
+
+#### Font Family
+- **Primary**: Inter, system-ui, sans-serif
+- **Monospace**: SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace
+
+#### Type Scale
+- **Heading 1**: 32px/40px, weight 600
+- **Heading 2**: 28px/36px, weight 600
+- **Heading 3**: 24px/32px, weight 600
+- **Heading 4**: 20px/28px, weight 600
+- **Heading 5**: 16px/24px, weight 600
+- **Body**: 16px/24px, weight 400
+- **Small**: 14px/20px, weight 400
+- **Caption**: 12px/16px, weight 400
+- **Code**: 14px/20px, monospace
+
+### Coding Standards
+
+- Use Tailwind CSS for utility-first styling
+- Design responsive layouts for mobile and desktop
+- Simplify UI components for consistency and reusability
+
+## Project-Specific Conventions
+
+### Configuration Management
+
+1. **Environment-Based Configuration**: Load configuration based on environment.
+   - Example: `internal/config/loader.go` loads configuration files specific to environments.
+
+2. **Config Validation**: Validate configuration using a validator.
+   - Example: In `internal/config/loader.go`:
+   ```go
+   if err := validator.New().Struct(cfg); err != nil {
+       return nil, fmt.Errorf("config is not valid: %w", err)
+   }
+   ```
+
+3. **Environment Variables Override**: Environment variables override configuration files.
+   - Example: `Config.loadEnvs()` in `internal/config/config.go`.
+
+### Logging Practices
+
+1. **Structured Logging**: Use structured logging with standardized fields.
+   - Example: In `internal/logger/logger.go`, the logger implements methods like:
+   ```go
+   func (a *appLogger) Info(msg string, tags ...any) {
+       if a.group == "" {
+           a.logger.Info(msg, tags...)
+       } else {
+           a.logger.Info(msg, append(tags, "group", a.group)...)
+       }
+   }
+   ```
+
+2. **Error Context**: Add file location to error logs.
+   - Example: `withLocation` function in `internal/logger/logger.go`.
+
+3. **Context-Based Logging**: Retrieve logger from context.
+   - Example: `FromContext` function in `internal/logger/context.go`.
+
+### LLM Integration
+
+1. **Model Management**: Use a structured approach to manage LLM models.
+   - Example: The `gguf/` directory contains scripts for model management.
+
+2. **GGUF Format**: Standardize on GGUF format for models.
+   - Example: `gguf/README.md` describes the process for converting models to GGUF.
+
+3. **Ollama Integration**: Use Ollama for serving LLMs.
+   - Example: `docker/ollama/Dockerfile` configures Ollama for deployment.
+
+## Common Patterns
+
+### HTTP Server Setup
+
+1. **Chi Router**: Use the Chi router for HTTP routing.
+   - Example: In `internal/infrastructure/server.go`:
+   ```go
+   r := chi.NewMux()
+   r.Use(middleware.RealIP)
+   r.Use(middleware.Compress(5))
+   ```
+
+2. **Middleware Chain**: Apply middleware in a consistent order.
+   - Example: In `internal/infrastructure/server.go`, middleware is applied in a specific order.
+
+3. **Graceful Shutdown**: Implement graceful shutdown for the HTTP server.
+   - Example: `gracefulShutdown` method in `internal/infrastructure/server.go`.
+
+### Error Handling
+
+1. **Error Wrapping**: Wrap errors with context using `fmt.Errorf()` and `%w`.
+   - Example: Throughout the codebase, errors are wrapped with additional context.
+
+2. **Error Logging**: Log errors with appropriate context.
+   - Example: In `internal/infrastructure/middleware.go`:
+   ```go
+   logger.Error(r.Context(), "Panic occurred", "err", rvr, "st", st)
+   ```
+
+3. **HTTP Error Responses**: Return appropriate HTTP error codes.
+   - Example: In `internal/frontend/assets.go`:
+   ```go
+   http.Error(w, "Template not found", http.StatusInternalServerError)
+   ```
+
+### Dependency Injection
+
+1. **Fx Module Pattern**: Each component provides an fx.Module.
+   - Example: `internal/frontend/module.go` exports a module.
+
+2. **Lifecycle Hooks**: Use fx lifecycle hooks for startup and shutdown.
+   - Example: In `cmd/server/main.go`:
+   ```go
+   opts = append(opts, fx.Invoke(infrastructure.ServerLifetimeHooks))
+   ```
+
+## Security Considerations
+
+1. **CORS Configuration**: Configure CORS for restrictive access.
+   - Example: In `internal/infrastructure/server.go`:
+   ```go
+   r.Use(cors.Handler(cors.Options{
+       AllowedOrigins:   srv.appConfig.Server.AllowedOrigins,
+       AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+       AllowedHeaders:   []string{"*"},
+       AllowCredentials: true,
+   }))
+   ```
+
+2. **Cloud Run Security**: Use appropriate Cloud Run security settings.
+   - Example: The current setup in `infrastructure/modules/ollama/main.tf` allows public access, which should be restricted in production:
+   ```terraform
+   data "google_iam_policy" "noauth" {
+     binding {
+       role    = "roles/run.invoker"
+       members = ["allUsers"]
+     }
+   }
+   ```
+
+3. **Service Account Permissions**: Use service accounts with minimal permissions.
+   - Example: In `infrastructure/environments/exp/main.tf`, a specific service account with restricted permissions is created.
+
+4. **HTTP Headers**: Set appropriate security headers.
+   - Example: In `internal/frontend/routes.go`:
+   ```go
+   w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+   ```
+
+## Documentation Standards
+
+1. **README Files**: Each major component should have a README.md.
+   - Example: `infrastructure/README.md`, `gguf/README.md`.
+
+2. **Code Comments**: Public functions and types should have comments.
+   - Example: Throughout the codebase, public functions and types have comments.
+
+3. **Example Configuration**: Include example configuration files.
+   - Example: `infrastructure/environments/exp/terraform.tfvars.example`.
+
+4. **Usage Instructions**: Include usage instructions in README files.
+   - Example: `gguf/README.md` includes instructions for using the model conversion tools.
+
+## Best Practices
+
+1. **Embedded Templates and Static Files**: Use Go's embed package for templates and static files.
+   - Example: `internal/frontend/assets.go` uses `//go:embed` directives.
+
+2. **Context-Based Cancellation**: Use context for timeouts and cancellation.
+   - Example: In `internal/infrastructure/server.go`:
+   ```go
+   ctx, cancel := context.WithTimeout(ctx, srv.config.ShutdownTimeout)
+   defer cancel()
+   ```
+
+3. **Infrastructure as Code**: Use Terraform for all infrastructure management.
+   - Example: The `infrastructure/` directory contains Terraform configurations.
+
+4. **Version Pinning**: Pin dependencies to specific versions.
+   - Example: In `go.mod` and Terraform provider configurations.
+
+5. **Graceful Degradation**: Handle errors gracefully.
+   - Example: Error handling throughout the codebase.
+
+6. **Zero Downtime Deployment**: Configure services for zero downtime deployment.
+   - Example: The Cloud Run configuration in `infrastructure/modules/ollama/main.tf` includes scaling configuration.
+
+7. **Testing**: Include tests for components.
+   - Example: The Makefile includes a `test` target.
+
+8. **Linting**: Use linters to maintain code quality.
+   - Example: The Makefile includes a `lint` target.
+
+## Testing Standards
+
+1. **Test Organization**: Use a single test function with logical subtests (per function, method, or other logical grouping).
+   - Example: In `internal/config/config_test.go`, all tests are organized under a single `TestConfig` function with logical groupings using `t.Run`:
+   ```go
+   func TestConfig(t *testing.T) {
+       // Loading Configuration Tests
+       t.Run("Load_Success", func(t *testing.T) {
+           // Test implementation
+       })
+       
+       t.Run("Load_FileNotFound", func(t *testing.T) {
+           // Test implementation
+       })
+       
+       // More subtests...
+   }
+   - Do not include redundant test names in subtests:
+   ```go
+   func TestConfig(t *testing.T) {
+      // Bad
+      t.Run("TestConfig_Load_Success", func(t *testing.T) {
+          // Test implementation
+      })
+      // Good
+      t.Run("Load_Success", func(t *testing.T) {
+          // Test implementation
+      })
+   } 
+   ```
+   - Use t.Parallel() in subtests that can run concurrently:
+   ```go
+   t.Run("Load_Success", func(t *testing.T) {
+       t.Parallel()
+       // Test implementation
+   })
+   ```
+   - Create test helper structs when it makes tests more readable:
+   ```go
+   // Example test helper struct
+   type TestHelper struct {
+   	tb testing.TB
+   }
+   func NewTestHelper(tb testing.TB) *TestHelper {
+   	return &TestHelper{tb: tb}
+   }
+   func (th *TestHelper) Post(t *testing.TB, url string, expectedStatus int) ResponseHelper {
+   	t.Helper()
+   	// Test implementation
+   }
+   ```
+   - Use table-driven tests for multiple test cases with similar logic
+
+2. **Logical Test Grouping**: Group related tests together with clear section comments.
+   - Example: Tests in `internal/config/config_test.go` are grouped into sections like "Loading Configuration Tests", "Environment Variable Tests", "Options Tests", etc.
+
+3. **Test Isolation**: Each test should be independent and not rely on the state from other tests.
+   - Example: Each subtest in `TestConfig` creates its own temporary directory and test files.
+
+4. **Descriptive Test Names**: Use clear, descriptive names for tests that indicate what's being tested.
+   - Example: Test names like `Load_Success`, `Load_FileNotFound`, `Config_LoadEnvs_OverrideHost` clearly indicate the functionality being tested.
+
+5. **Comprehensive Assertions**: Test both success and error cases, and validate all relevant aspects of the result.
+   - Example: Testing both valid configurations and various error conditions like missing files, invalid YAML, and validation failures.
+
+6. **Test Simplicity and Minimal Redundancy**: Keep tests simple and avoid redundant test cases. Focus on testing unique code paths rather than repeating similar tests with minor variations.
+   - Example: Use table-driven tests to handle multiple similar test cases with a single test function.
+   - Example: Test boundary conditions and representative cases rather than every possible input.
+   - Example: Split large test functions into multiple smaller, focused test functions when they become too complex.
+   - Example: Use helper functions to reduce duplication in test setup and assertions.

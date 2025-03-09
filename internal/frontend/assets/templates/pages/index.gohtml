@@ -1,0 +1,909 @@
+{{ define "content" }}
+<div class="container">
+  <h2>AI Code Review</h2>
+  <p class="description">
+    コードを以下に貼り付けて送信すると、AIコードレビュアーがコードを分析し、改善案を提案します。<br />
+  </p>
+
+  <div class="code-review-container">
+    <div class="editor-section">
+      <h3>対象コード</h3>
+      <div class="editor-container" id="monaco-editor"></div>
+      <div class="review-options">
+        <div class="review-option">
+          <label for="model-select">モデル:</label>
+          <select id="model-select" class="review-select"
+            onchange="localStorage.setItem('modelPreference', this.value); console.log('Model preference saved via inline handler:', this.value); if(typeof checkLocalModel === 'function') checkLocalModel(this.value);">
+            {{ range .Models }}
+            <option value="{{ . }}">{{ . }}</option>
+            {{ end }}
+          </select>
+          <div id="local-model-warning" class="model-warning">
+            <small>(ローカル生成 AI モデルを選択した場合、GPU付きサーバの起動に数十秒かかる場合があります)</small>
+          </div>
+        </div>
+        <div class="review-option">
+          <label for="detail-level">詳細度:</label>
+          <select id="detail-level" class="review-select">
+            <option value="low">簡潔 (概要のみ)</option>
+            <option value="medium" selected>標準</option>
+            <option value="high">詳細 (具体的な改善案を含む)</option>
+          </select>
+        </div>
+        <div class="review-option">
+          <label for="strictness">厳しさ:</label>
+          <select id="strictness" class="review-select">
+            <option value="low">緩め (重要な問題のみ)</option>
+            <option value="medium" selected>標準</option>
+            <option value="high">厳格 (ベストプラクティスを厳密に適用)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="editor-actions">
+        <button id="review-button" class="btn btn-primary" hx-post="/review" hx-target="#review-results"
+          hx-swap="innerHTML" hx-trigger="click" hx-vals='js:{
+            "code": window.editor ? window.editor.getValue() : "",
+            "language": document.getElementById("language-select").value,
+            "detailLevel": document.getElementById("detail-level").value,
+            "strictness": document.getElementById("strictness").value,
+            "model": document.getElementById("model-select").value
+          }'>
+          コードをレビュー
+        </button>
+        <select id="language-select" class="language-select">
+          <option value="python">Python</option>
+          <option value="javascript">JavaScript</option>
+          <option value="typescript">TypeScript</option>
+          <option value="go">Go</option>
+          <option value="java">Java</option>
+          <option value="csharp">C#</option>
+          <option value="cpp">C++</option>
+          <option value="php">PHP</option>
+          <option value="ruby">Ruby</option>
+          <option value="swift">Swift</option>
+          <option value="kotlin">Kotlin</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="results-section">
+      <h3>レビュー結果</h3>
+      <div id="review-results" class="review-results" hx-trigger="load" hx-get="/result" hx-swap="innerHTML">
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-history">
+    <h3>レビュー履歴</h3>
+    <div id="chat-history-container">
+      <p class="empty-state">Your review history will appear here.</p>
+    </div>
+  </div>
+
+  <div id="loading-overlay" class="overlay" style="display: none;">
+    <div class="overlay-content">
+      <p>コードを分析中</p>
+    </div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "styles" }}
+<link rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/editor/editor.main.min.css">
+<style>
+  .description {
+    text-align: center;
+    margin-bottom: 30px;
+    color: var(--text-secondary);
+  }
+
+  h2 {
+    color: var(--primary-color);
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+  }
+
+  .code-review-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+
+  .editor-section,
+  .results-section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .editor-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+    align-items: center;
+  }
+
+  .language-select {
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background-color: white;
+    font-size: 14px;
+  }
+
+  .empty-state {
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  /* Model warning styles */
+  .model-warning {
+    margin-top: 5px;
+    color: #856404;
+    font-size: 12px;
+  }
+
+  /* Review History Styles */
+  .chat-history {
+    margin-top: 30px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
+  }
+
+  .review-history-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+  }
+
+  .review-history-item {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 12px;
+    background-color: white;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .review-history-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .review-history-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .review-language {
+    font-weight: 500;
+    color: var(--primary-color);
+  }
+
+  .review-date {
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  .review-model {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-style: italic;
+  }
+
+  .review-history-code {
+    background-color: #f5f5f5;
+    padding: 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    overflow: hidden;
+    margin-bottom: 10px;
+    max-height: 80px;
+  }
+
+  .review-history-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .btn-small {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
+  .btn-outline {
+    background-color: transparent;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+  }
+
+  .btn-outline:hover {
+    background-color: var(--primary-color);
+    color: white;
+  }
+
+  @media (max-width: 768px) {
+    .code-review-container {
+      grid-template-columns: 1fr;
+    }
+
+    .review-history-list {
+      grid-template-columns: 1fr;
+    }
+
+    .container {
+      width: 100%;
+      padding: 0 10px;
+      overflow-x: hidden;
+    }
+
+    .editor-container {
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    #monaco-editor {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+
+    .markdown-content {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+  }
+</style>
+{{ end }}
+
+{{ define "scripts" }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+<script>
+  // Review history management
+  const reviewHistory = {
+    // Maximum number of reviews to store
+    maxReviews: 10,
+
+    // Save a review to localStorage
+    saveReview: function (review) {
+      if (!review.id) {
+        return;
+      }
+
+      // Get existing reviews
+      const reviews = this.getReviews();
+
+      // Add new review at the beginning
+      reviews.unshift(review);
+
+      // Limit to maxReviews
+      if (reviews.length > this.maxReviews) {
+        reviews.pop();
+      }
+
+      // Save to localStorage
+      localStorage.setItem('codeReviews', JSON.stringify(reviews));
+
+      // Update the UI
+      this.displayReviews();
+    },
+
+    // Get reviews from localStorage
+    getReviews: function () {
+      const reviewsJson = localStorage.getItem('codeReviews');
+      return reviewsJson ? JSON.parse(reviewsJson) : [];
+    },
+
+    // Display reviews in the history section
+    displayReviews: function () {
+      const reviews = this.getReviews();
+      const container = document.getElementById('chat-history-container');
+
+      if (reviews.length === 0) {
+        container.innerHTML = '<p class="empty-state">Your review history will appear here.</p>';
+        return;
+      }
+
+      let html = '<div class="review-history-list">';
+
+      reviews.forEach(review => {
+        const date = new Date(review.createdAt);
+        const formattedDate = date.toLocaleString();
+
+        html += `
+          <div class="review-history-item" data-review-id="${review.id}">
+            <div class="review-history-header">
+              <span class="review-language">${review.language}</span>
+              <span class="review-date">${formattedDate}</span>
+            </div>
+            ${review.model ? `<div class="review-model">モデル: ${review.model}</div>` : ''}
+            <div class="review-history-code">${this.truncateCode(review.code)}</div>
+            <div class="review-history-actions">
+              <button class="btn-small btn-outline" onclick="reviewHistory.loadReview('${review.id}')">Load</button>
+            </div>
+          </div>
+        `;
+      });
+
+      html += '</div>';
+      container.innerHTML = html;
+    },
+
+    // Truncate code for display in history
+    truncateCode: function (code) {
+      const maxLength = 300;
+      if (code.length <= maxLength) {
+        return this.escapeHtml(code);
+      }
+      return this.escapeHtml(code.substring(0, maxLength)) + '...';
+    },
+
+    // Escape HTML to prevent XSS
+    escapeHtml: function (text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    },
+
+    // Load a review into the editor
+    loadReview: function (id) {
+      const reviews = this.getReviews();
+      const review = reviews.find(r => r.id === id);
+
+      if (review) {
+        // Set the code in the editor
+        if (window.editor) {
+          window.editor.setValue(review.code);
+        }
+
+        // Set the language
+        const languageSelect = document.getElementById('language-select');
+        if (languageSelect) {
+          languageSelect.value = review.language;
+          if (window.editor) {
+            monaco.editor.setModelLanguage(window.editor.getModel(), review.language);
+          }
+        }
+
+        // Set detail level
+        const detailLevel = document.getElementById('detail-level');
+        if (detailLevel) {
+          detailLevel.value = review.detailLevel;
+        }
+        // Set strictness
+        const strictness = document.getElementById('strictness');
+        if (strictness) {
+          strictness.value = review.strictness;
+        }
+
+        // Set model if available
+        if (review.model) {
+          const modelSelect = document.getElementById('model-select');
+          if (modelSelect) {
+            modelSelect.value = review.model;
+          }
+        }
+      }
+
+      // Display the result
+      const resultsContainer = document.getElementById('review-results');
+      if (resultsContainer) {
+        // Use HTMX to load the result
+        htmx.ajax('GET', '/result', { target: '#review-results' });
+      }
+    }
+  };
+
+  // User preferences management
+  const userPreferences = {
+    // Save user preferences to localStorage
+    savePreferences: function () {
+      const modelSelect = document.getElementById('model-select');
+      const modelValue = modelSelect ? modelSelect.value : '';
+
+      const preferences = {
+        model: modelValue,
+        detailLevel: document.getElementById('detail-level').value,
+        strictness: document.getElementById('strictness').value,
+        language: document.getElementById('language-select').value,
+        code: window.editor ? window.editor.getValue() : ''
+      };
+
+      console.log('Saving preferences:', preferences);
+      localStorage.setItem('codeReviewPreferences', JSON.stringify(preferences));
+    },
+
+    // Save just the model preference
+    saveModelPreference: function (modelValue) {
+      if (!modelValue) return;
+
+      // Get existing preferences or create new object
+      let preferences = this.loadPreferences() || {};
+
+      // Update model value
+      preferences.model = modelValue;
+
+      console.log('Explicitly saving model preference:', modelValue);
+      localStorage.setItem('codeReviewPreferences', JSON.stringify(preferences));
+    },
+
+    // Load user preferences from localStorage
+    loadPreferences: function () {
+      const preferencesJson = localStorage.getItem('codeReviewPreferences');
+      if (!preferencesJson) {
+        console.log('No saved preferences found');
+        return null;
+      }
+
+      try {
+        const preferences = JSON.parse(preferencesJson);
+        console.log('Loaded preferences:', preferences);
+        return preferences;
+      } catch (e) {
+        console.error('Failed to parse preferences:', e);
+        return null;
+      }
+    },
+
+    // Apply saved preferences to the form
+    applyPreferences: function () {
+      const preferences = this.loadPreferences();
+      if (!preferences) return;
+
+      // Set model with a slight delay to ensure options are populated
+      setTimeout(() => {
+        const modelSelect = document.getElementById('model-select');
+        if (modelSelect && preferences.model) {
+          console.log('Attempting to apply model preference:', preferences.model);
+          console.log('Available models:', Array.from(modelSelect.options).map(o => o.value));
+
+          // Check if the saved model exists in the options
+          // First try exact match
+          let modelExists = Array.from(modelSelect.options).some(option => option.value === preferences.model);
+
+          if (modelExists) {
+            modelSelect.value = preferences.model;
+            console.log('Model preference applied:', preferences.model);
+          } else {
+            // If exact match fails, try case-insensitive match
+            const savedModelLower = preferences.model.toLowerCase();
+            for (let i = 0; i < modelSelect.options.length; i++) {
+              if (modelSelect.options[i].value.toLowerCase() === savedModelLower) {
+                modelSelect.value = modelSelect.options[i].value;
+                console.log('Model preference applied (case-insensitive):', modelSelect.options[i].value);
+                modelExists = true;
+                break;
+              }
+            }
+
+            if (!modelExists) {
+              console.warn('Saved model not found in options:', preferences.model);
+              console.log('Available models:', Array.from(modelSelect.options).map(o => o.value));
+            }
+          }
+
+          // Trigger the local model warning check
+          if (typeof checkLocalModel === 'function') {
+            checkLocalModel(modelSelect.value);
+          }
+        }
+      }, 0); // Small delay to ensure options are populated
+
+      // Set detail level
+      const detailLevel = document.getElementById('detail-level');
+      if (detailLevel && preferences.detailLevel) {
+        detailLevel.value = preferences.detailLevel;
+      }
+
+      // Set strictness
+      const strictness = document.getElementById('strictness');
+      if (strictness && preferences.strictness) {
+        strictness.value = preferences.strictness;
+      }
+
+      // Set language
+      const languageSelect = document.getElementById('language-select');
+      if (languageSelect && preferences.language) {
+        languageSelect.value = preferences.language;
+        // Update Monaco editor language if editor is initialized
+        if (window.editor && monaco) {
+          monaco.editor.setModelLanguage(window.editor.getModel(), preferences.language);
+        }
+      }
+
+      // Set code in editor (if editor is initialized and code is not empty)
+      if (window.editor && preferences.code && preferences.code.trim() !== '') {
+        window.editor.setValue(preferences.code);
+      }
+    },
+
+    // Setup event listeners for form elements
+    setupEventListeners: function () {
+      // Model select - only set up if not already handled in Monaco initialization
+      // The Monaco initialization already sets up this event listener
+
+      // Detail level
+      const detailLevel = document.getElementById('detail-level');
+      if (detailLevel) {
+        console.log('Setting up detail level change listener');
+        detailLevel.addEventListener('change', () => {
+          console.log('Detail level changed to:', detailLevel.value);
+          this.savePreferences();
+        });
+      }
+
+      // Strictness
+      const strictness = document.getElementById('strictness');
+      if (strictness) {
+        console.log('Setting up strictness change listener');
+        strictness.addEventListener('change', () => {
+          console.log('Strictness changed to:', strictness.value);
+          this.savePreferences();
+        });
+      }
+
+      // Language select - only set up if not already handled in Monaco initialization
+      // The Monaco initialization already sets up this event listener
+
+      // Editor content is handled in Monaco initialization
+    }
+  };
+
+  // Function to check if model is local and show/hide warning
+  // Defined in global scope so it's available to inline handlers
+  function checkLocalModel(modelName) {
+    const warningElement = document.getElementById('local-model-warning');
+    if (warningElement) {
+      // Check if the model name contains indicators of local models
+      // This logic may need to be adjusted based on your actual model naming conventions
+      const isLocalModel = modelName.toLowerCase().includes('local') ||
+        modelName.toLowerCase().includes('ollama') ||
+        !modelName.toLowerCase().includes('openai');
+
+      console.log('Checking if model is local:', modelName, isLocalModel);
+      warningElement.style.display = isLocalModel ? 'block' : 'none';
+    }
+  }
+
+  // Initialize review history display and user preferences
+  document.addEventListener('DOMContentLoaded', function () {
+    reviewHistory.displayReviews();
+
+    // Check if model is local on page load
+    const modelSelect = document.getElementById('model-select');
+    if (modelSelect) {
+      console.log('Checking model on page load:', modelSelect.value);
+      checkLocalModel(modelSelect.value);
+    }
+
+    // Direct approach to set model preference
+    try {
+      // First check for direct model preference
+      const directModelPreference = localStorage.getItem('modelPreference');
+
+      // Then check in preferences object
+      const preferencesJson = localStorage.getItem('codeReviewPreferences');
+      let modelToUse = null;
+
+      if (directModelPreference) {
+        console.log('Found direct model preference:', directModelPreference);
+        modelToUse = directModelPreference;
+      } else if (preferencesJson) {
+        const preferences = JSON.parse(preferencesJson);
+        if (preferences.model) {
+          console.log('Found model preference in preferences object:', preferences.model);
+          modelToUse = preferences.model;
+        }
+      }
+
+      if (modelToUse) {
+        // Set up an interval to try setting the model value repeatedly
+        // This ensures it gets set even if the options are populated asynchronously
+        const modelSetInterval = setInterval(() => {
+          const modelSelect = document.getElementById('model-select');
+          if (modelSelect) {
+            console.log('Attempting to set model directly:', modelToUse);
+            console.log('Available options:', Array.from(modelSelect.options).map(o => o.value));
+
+            try {
+              modelSelect.value = modelToUse;
+              console.log('Model value set to:', modelSelect.value);
+
+              // Check if it worked
+              if (modelSelect.value === modelToUse) {
+                console.log('Model preference successfully applied!');
+                clearInterval(modelSetInterval);
+
+                // Update warning display
+                checkLocalModel(modelSelect.value);
+              }
+            } catch (e) {
+              console.error('Error setting model value:', e);
+            }
+          }
+        }, 100); // Try every 100ms
+
+        // Stop trying after 5 seconds to prevent infinite attempts
+        setTimeout(() => {
+          clearInterval(modelSetInterval);
+          console.log('Stopped trying to set model preference after timeout');
+        }, 5000);
+      }
+    } catch (e) {
+      console.error('Error in direct model preference setter:', e);
+    }
+
+    // Apply saved preferences
+    userPreferences.applyPreferences();
+
+    // Setup preference saving
+    userPreferences.setupEventListeners();
+  });
+
+  // Add direct event listener to review button
+  document.addEventListener('DOMContentLoaded', function () {
+    const reviewButton = document.getElementById('review-button');
+    if (reviewButton) {
+      reviewButton.addEventListener('click', function () {
+        // Save model preference directly when review button is clicked
+        const modelSelect = document.getElementById('model-select');
+        if (modelSelect) {
+          const selectedModel = modelSelect.value;
+          console.log('Saving model preference from review button click:', selectedModel);
+
+          // Direct localStorage access
+          localStorage.setItem('modelPreference', selectedModel);
+
+          // Also update in preferences object
+          try {
+            const preferencesJson = localStorage.getItem('codeReviewPreferences');
+            let preferences = preferencesJson ? JSON.parse(preferencesJson) : {};
+            preferences.model = selectedModel;
+            localStorage.setItem('codeReviewPreferences', JSON.stringify(preferences));
+          } catch (e) {
+            console.error('Error saving model preference from review button:', e);
+          }
+        }
+      });
+    }
+  });
+
+  // HTMX indicator setup
+  document.addEventListener('htmx:beforeRequest', function (event) {
+    // Show loading indicator when request starts
+    document.getElementById('loading-overlay').style.display = 'flex';
+
+    // Disable the button during request
+    const button = document.getElementById('review-button');
+    if (button) {
+      button.disabled = true;
+      button.classList.add('btn-disabled');
+      button.innerHTML = '<div class="spinner" style="width:16px;height:16px"></div> Analyzing...';
+    }
+  });
+
+  document.addEventListener('htmx:afterRequest', function (event) {
+    // Hide loading indicator when request completes
+    document.getElementById('loading-overlay').style.display = 'none';
+
+    // Re-enable the button after request
+    const button = document.getElementById('review-button');
+    if (button) {
+      button.disabled = false;
+      button.classList.remove('btn-disabled');
+      button.innerHTML = 'Review Code';
+    }
+
+    // Check if this is a review response
+    if (event.detail.target && event.detail.target.id === 'review-results') {
+      const resultsDiv = document.querySelector('.markdown-content');
+      if (resultsDiv && resultsDiv.dataset.reviewId) {
+        // Save the review to history
+        const reviewId = resultsDiv.dataset.reviewId;
+        const code = window.editor ? window.editor.getValue() : '';
+        const language = document.getElementById('language-select').value;
+        const detailLevel = document.getElementById('detail-level').value;
+        const strictness = document.getElementById('strictness').value;
+        const model = document.getElementById('model-select').value;
+        const result = resultsDiv.innerHTML;
+
+        // Directly save model preference to localStorage
+        if (model) {
+          try {
+            console.log('Saving model preference from review submission:', model);
+            // Direct localStorage access
+            localStorage.setItem('modelPreference', model);
+
+            // Also update in preferences object
+            const preferencesJson = localStorage.getItem('codeReviewPreferences');
+            let preferences = preferencesJson ? JSON.parse(preferencesJson) : {};
+            preferences.model = model;
+            localStorage.setItem('codeReviewPreferences', JSON.stringify(preferences));
+          } catch (e) {
+            console.error('Error saving model preference from review:', e);
+          }
+        }
+
+        reviewHistory.saveReview({
+          id: reviewId,
+          code: code,
+          language: language,
+          detailLevel: detailLevel,
+          strictness: strictness,
+          model: model,
+          result: result,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  });
+
+  // Monaco Editor setup - simplified approach
+  require.config({
+    paths: {
+      'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs'
+    }
+  });
+
+  let editor;
+  let currentLanguage = 'javascript';
+
+  // Load Monaco
+  require(['vs/editor/editor.main'], function () {
+    // Disable validation for all languages to prevent error squiggles
+    // This is especially important for Python, Ruby, etc. that Monaco doesn't fully support
+
+    // Disable JavaScript/TypeScript validation
+    if (monaco.languages.typescript) {
+      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true
+      });
+
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+        noSemanticValidation: true,
+        noSyntaxValidation: true
+      });
+    }
+
+    // Get saved preferences
+    const preferences = userPreferences.loadPreferences();
+
+    // Set initial language from preferences or language select
+    if (preferences && preferences.language) {
+      currentLanguage = preferences.language;
+    } else {
+      const languageSelect = document.getElementById('language-select');
+      if (languageSelect) {
+        currentLanguage = languageSelect.value;
+      }
+    }
+
+    // Get initial code from preferences
+    let initialCode = '# ここにコードを記入してください\n';
+    if (preferences && preferences.code && preferences.code.trim() !== '') {
+      initialCode = preferences.code;
+    }
+
+    // Create the editor instance
+    editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+      value: initialCode,
+      language: currentLanguage,
+      theme: 'vs',
+      automaticLayout: true,
+      minimap: {
+        enabled: false
+      },
+      scrollBeyondLastLine: false,
+      lineNumbers: 'on',
+      renderLineHighlight: 'all',
+      fontFamily: 'SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace',
+      fontSize: 14
+    });
+
+    // Make editor available globally for HTMX
+    window.editor = editor;
+
+    // Handle model selection change - completely new approach
+    const modelSelect = document.getElementById('model-select');
+    if (modelSelect) {
+      // Clone and replace to remove any existing listeners
+      const newModelSelect = modelSelect.cloneNode(true);
+      modelSelect.parentNode.replaceChild(newModelSelect, modelSelect);
+
+      // Add a fresh event listener with direct localStorage access
+      newModelSelect.addEventListener('change', function () {
+        const selectedModel = this.value;
+        console.log('Model changed to:', selectedModel);
+
+        // Update warning display
+        checkLocalModel(selectedModel);
+
+        // Directly save to localStorage without using preferences object
+        try {
+          // Get existing preferences
+          const preferencesJson = localStorage.getItem('codeReviewPreferences');
+          let preferences = preferencesJson ? JSON.parse(preferencesJson) : {};
+
+          // Update model and save back
+          preferences.model = selectedModel;
+          localStorage.setItem('codeReviewPreferences', JSON.stringify(preferences));
+
+          console.log('Model preference saved directly to localStorage:', selectedModel);
+        } catch (e) {
+          console.error('Error saving model preference:', e);
+        }
+      });
+
+      // Set up a MutationObserver to watch for changes to the select options
+      const observer = new MutationObserver(function (mutations) {
+        console.log('Model select options changed');
+
+        // Try to apply the saved model preference
+        try {
+          const preferencesJson = localStorage.getItem('codeReviewPreferences');
+          if (preferencesJson) {
+            const preferences = JSON.parse(preferencesJson);
+            if (preferences.model) {
+              console.log('Attempting to set model from MutationObserver:', preferences.model);
+              newModelSelect.value = preferences.model;
+
+              // Update warning display after setting the model
+              checkLocalModel(newModelSelect.value);
+            }
+          }
+        } catch (e) {
+          console.error('Error in MutationObserver:', e);
+        }
+      });
+
+      // Start observing
+      observer.observe(newModelSelect, { childList: true, subtree: true });
+    }
+
+    // Handle language selection change
+    const languageSelect = document.getElementById('language-select');
+    languageSelect.addEventListener('change', function () {
+      const newLanguage = this.value;
+
+      // Update the editor model language
+      monaco.editor.setModelLanguage(editor.getModel(), newLanguage);
+
+      // Update current language variable
+      currentLanguage = newLanguage;
+
+      console.log(`Language changed to: ${newLanguage}`);
+
+      // Save preferences
+      userPreferences.savePreferences();
+    });
+
+    // Setup editor content change listener for saving preferences
+    let debounceTimer;
+    editor.onDidChangeModelContent(() => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => userPreferences.savePreferences(), 1000);
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', function () {
+      editor.layout();
+    });
+
+    // Now that editor is initialized, setup all preference event listeners
+    userPreferences.setupEventListeners();
+  });
+</script>
+{{ end }}

@@ -1,0 +1,25 @@
+{
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": [
+    "--fast"
+  ],
+  "editor.formatOnSave": true,
+  "editor.renderWhitespace": "all",
+  "search.exclude": {
+    "go.sum": true
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features"
+  },
+  "files.associations": {
+    "*.gohtml": "html",
+    "*.css": "tailwindcss"
+  },
+  "[markdown]": {
+    "editor.formatOnSave": false
+  },
+  "[sql]": {
+    "editor.formatOnSave": false
+  },
+}
