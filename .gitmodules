@@ -1,0 +1,4 @@
+[submodule "gguf/llama.cpp"]
+	path = gguf/llama.cpp
+	url = git@github.com:ggml-org/llama.cpp.git
+	shallow = true

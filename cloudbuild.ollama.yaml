@@ -1,0 +1,30 @@
+steps:
+  # Build the image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ollama-backend:${SHORT_SHA}"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ollama-backend:latest"
+      - "--build-arg=VERSION=${SHORT_SHA}"
+      - "./docker/ollama"
+  # Push the image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ollama-backend:${SHORT_SHA}"
+  # Push the image as latest
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ollama-backend:latest"
+images:
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ollama-backend:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ollama-backend:latest"
+substitutions:
+  _REGION: "region"
+  _PROJECT_ID: "project-id"
+  _REPOSITORY: "repo-name"
+options:
+  logging: CLOUD_LOGGING_ONLY
