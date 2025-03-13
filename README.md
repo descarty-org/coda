@@ -115,7 +115,7 @@ Coda can be deployed to Google Cloud Run with GPU support:
 Note: Refer to the [infrastructure README](infrastructure/README.md) for detailed deployment instructions.
 
 1. Set up your Google Cloud project:
-   ```bash
+   ```sh
    export PROJECT_ID=your-project-id
    gcloud config set project $PROJECT_ID
    ```
@@ -123,13 +123,13 @@ Note: Refer to the [infrastructure README](infrastructure/README.md) for detaile
 2. Copy `infrastructure/environments/exp/terraform.tfvars.example` to `terraform.tfvars` and fill in the required variables.
 
 3. Initialize Terraform:
-   ```bash
+   ```sh
    cd infrastructure/environments/exp
    terraform init
    ```
 
 4. Apply the Terraform configuration:
-   ```bash
+   ```sh
    terraform apply
    ```
 

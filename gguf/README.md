@@ -20,12 +20,12 @@ This repository contains the necessary files and instructions to convert and pub
 Note: This instruction is largely inspired by [this tutorial](https://github.com/ggml-org/llama.cpp/discussions/2948)
 
 1. Download the model from Hugging Face 
-  ```bash
+  ```sh
   ./download.sh
   ```
 
 2. Convert the model to GGUF
-  ```bash
+  ```sh
   git submodule update --init --recommend-shallow
   uv add -r llama.cpp/requirements.txt
   uv run llama.cpp/convert_hf_to_gguf.py ./models/tiny-swallow-1.5b-instruct --outfile out/tiny-swallow-1.5b-instruct.gguf
@@ -35,12 +35,17 @@ Note: This instruction is largely inspired by [this tutorial](https://github.com
 
 1. Create a new repository <username>/<my-model> on [Ollama](https://ollama.com)
 
-2. Create the `Modelfile` with the following content
+2. Create the `Modelfile` with the following content:
   ```yaml
   FROM </path/to/model>.gguf
 
+  # Model metadata
+  # ...
+  # ...
+  ```
+
 3. Push the model to the repository
-  ```bash
+  ```sh
   ollama create <username>/<my-model>
   ollama push <username>/<my-model>
   ```
