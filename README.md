@@ -10,6 +10,8 @@ Coda is a production-ready application that demonstrates deploying GenAI models 
 
 ### Demo
 
+Live Demo: [https://coda-65660115580.asia-northeast1.run.app/](https://coda-65660115580.asia-northeast1.run.app/)
+
 ![Coda Demo](./assets/images/coda-demo.gif)
 
 ### Core Features
