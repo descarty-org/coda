@@ -16,8 +16,8 @@ import (
 // https://platform.openai.com/docs/models
 var (
 	ModelGPT4o = llm.Model{
-		Name:          "gpt-4o",
-		DisplayName:   "OpenAI gpt-4o",
+		Name:          "gpt-4o-mini",
+		DisplayName:   "OpenAI GPT-4o mini",
 		Provider:      llm.OpenAI,
 		MaxToken:      16384,
 		ContextWindow: 128_000,
