@@ -1,8 +1,8 @@
-# Coda: Local GenAI Models on Cloud Run - A Go & HTMX Integration Example
+# Coda: Run Local GenAI Models on Cloud Run with Go
 
 ## Overview
 
-Coda is an example application for building a secure, scalable, and observable Large Language Model (LLM) powered application. The web application is built with Go and HTMX, and integrates with OpenAI, Langfuse, and Local GenAI Models models. The project includes Terraform configurations for deploying to Google Cloud Run with GPU support.
+Coda is a production-ready application that demonstrates deploying GenAI models on Google Cloud Run with GPU acceleration. The project integrates a Go web application with both OpenAI and locally-hosted models via Ollama. It implements observability through Langfuse and provides Terraform configurations for Cloud Run deployment with GPU support.
 
 ### Architecture
 
@@ -14,14 +14,14 @@ Coda is an example application for building a secure, scalable, and observable L
 
 ### Core Features
 
-1. **Local GenAI Integration**: Run GenAI models locally with Ollama and integrate with the web application.
-2. **Terraform IaC**: Infrastructure as Code (IaC) for deploying the application to Google Cloud Run with GPU support.
-3. **Lightweight Frontend**: The frontend is built with Go and HTMX for simplicity.
-4. **Tracing**: Built-in Observability with Langfuse for LLM engineering.
+1. **Local GenAI Integration**: Direct integration with Ollama for running open-source LLMs locally or in your own infrastructure.
+2. **GPU-Accelerated Cloud Deployment**: Terraform configurations for deploying to Google Cloud Run with GPU support for optimal inference performance.
+3. **Server-Side Rendering UI**: Go templates with htmx for a responsive, JavaScript-minimal frontend without complex build processes.
+4. **LLM Observability**: Comprehensive tracing and analytics with Langfuse to monitor model performance, costs, and user interactions.
 
 ### Codebase Structure
 
-```
+```sh
 coda/
 ├── cmd/                  # Application entry points
 ├── config/               # Configuration management
@@ -50,7 +50,7 @@ coda/
 ## Setup Instructions
 
 ### Cloning the Repository
-```bash
+```sh
 git clone git@github.com:descarty-org/coda.git
 cd coda
 ```
@@ -74,21 +74,21 @@ Copy the `.env.example` file to `.env` and fill in the required variables.
 
 #### Running Ollama Locally
 
-```bash
+```sh
 ollama run "yottahmd/tiny-swallow-1.5b-instruct" # Download the model
 ollama serve # Start the REST API server
 ```
 
 #### Running the Server
 
-```bash
+```sh
 make run
 ```
 
 The web interface will be available at http://localhost:8080
 
 To run the server with a custom Ollama base URL:
-```bash
+```sh
 OLLAMA_BASE_URL=http://localhost:11434 make run
 ```
 
@@ -96,13 +96,13 @@ OLLAMA_BASE_URL=http://localhost:11434 make run
 
 Run the test suite with coverage reporting:
 
-```bash
+```sh
 make test
 ```
 
 #### Linting and Code Quality
 
-```bash
+```sh
 make lint
 ```
 
@@ -130,6 +130,48 @@ Note: Refer to the [infrastructure README](infrastructure/README.md) for detaile
    ```bash
    terraform apply
    ```
+
+## Technical Requirements
+
+### GPU Configuration
+
+Ollama on Cloud Run with GPU support requires the following resources:
+
+```hcl
+resources {
+  limits = {
+    "cpu" = "8"
+    "memory" = "32Gi"
+    "nvidia.com/gpu" = "1"
+  }
+  startup_cpu_boost = true
+}
+```
+
+### Scaling Considerations
+
+The default configuration includes scaling to zero instances when there are no requests. You can adjust the scaling and concurrency settings based on your requirements:
+
+```hcl
+scaling {
+  min_instance_count = 0
+  max_instance_count = 1
+}
+
+# Configure concurrency
+max_instance_request_concurrency = 4
+```
+
+- **Cold Start**: Be aware that the first request may experience cold start latency (up to 1 minutes) as the model is loaded into GPU memory.
+- **Instance Scaling**: The default configuration limits to a single instance to control costs.
+
+## References
+
+- [Ollama](https://github.com/ollama/ollama)
+- [Langfuse](https://langfuse.com/)
+- [Tiny Swallow 1.5B](https://huggingface.co/SakanaAI/TinySwallow-1.5B)
+- [Google Cloud Run with GPUs](https://cloud.google.com/run/docs/configuring/services/gpu)
+- [htmx](https://htmx.org/)
 
 ## Contributing
 
