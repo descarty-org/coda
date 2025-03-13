@@ -132,8 +132,8 @@ resource "google_cloudbuild_trigger" "coda_backend_push" {
   filename = "cloudbuild.coda.yaml"
 
   github {
-    owner = "descarty-org"
-    name  = "coda"
+    owner = var.github_owner
+    name  = var.github_name
     push {
       branch = "^main$"
     }
@@ -186,8 +186,8 @@ resource "google_cloudbuild_trigger" "ollama_backend_push" {
   filename = "cloudbuild.ollama.yaml"
 
   github {
-    owner = "descarty-org"
-    name  = "coda"
+    owner = var.github_owner
+    name  = var.github_name
     push {
       branch = "^main$"
     }
